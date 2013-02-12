@@ -744,7 +744,7 @@ co.doubleduck.BaseAssets.getRawImage = function(uri) {
 		var bmp = new createjs.Bitmap(uri);
 		co.doubleduck.BaseAssets._cacheData[uri] = bmp.image;
 		cache = bmp.image;
-		haxe.Log.trace("Requsted image that wasn't preloaded, consider preloading - \"" + uri + "\"",{ fileName : "BaseAssets.hx", lineNumber : 180, className : "co.doubleduck.BaseAssets", methodName : "getRawImage"});
+		null;
 	}
 	return cache;
 }
@@ -1173,10 +1173,7 @@ co.doubleduck.BaseGame.prototype = {
 		if(hidden) co.doubleduck.SoundManager.mute(); else if(!co.doubleduck.SoundManager.getPersistedMute()) co.doubleduck.SoundManager.unmute();
 	}
 	,showSplash: function() {
-		if(viewporter.ACTIVE) js.Lib.document.body.bgColor = "#00A99D"; else {
-			haxe.Log.trace(">>> viewporter is NOT active",{ fileName : "BaseGame.hx", lineNumber : 158, className : "co.doubleduck.BaseGame", methodName : "showSplash"});
-			js.Lib.document.body.bgColor = "#D94D00";
-		}
+		if(viewporter.ACTIVE) js.Lib.document.body.bgColor = "#00A99D"; else js.Lib.document.body.bgColor = "#D94D00";
 		this._splash = co.doubleduck.BaseAssets.getImage(co.doubleduck.BaseGame.LOGO_URI);
 		this._splash.regX = this._splash.image.width / 2;
 		this._splash.x = js.Lib.window.innerWidth / 2;
@@ -3402,7 +3399,7 @@ co.doubleduck.audio.WebAudioAPI.saveBuffer = function(buffer,name) {
 	co.doubleduck.audio.WebAudioAPI._buffers[name] = buffer;
 }
 co.doubleduck.audio.WebAudioAPI.decodeError = function() {
-	haxe.Log.trace("decode error",{ fileName : "WebAudioAPI.hx", lineNumber : 64, className : "co.doubleduck.audio.WebAudioAPI", methodName : "decodeError"});
+	null;
 }
 co.doubleduck.audio.WebAudioAPI.prototype = {
 	setVolume: function(volume) {
