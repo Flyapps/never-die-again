@@ -642,10 +642,10 @@ co.doubleduck.BaseAssets = $hxClasses["co.doubleduck.BaseAssets"] = function() {
 co.doubleduck.BaseAssets.__name__ = ["co","doubleduck","BaseAssets"];
 co.doubleduck.BaseAssets.loader = function() {
 	if(co.doubleduck.BaseAssets._loader == null) {
-		co.doubleduck.BaseAssets._loader = new createjs.PreloadJS();
-		co.doubleduck.BaseAssets._loader.initialize(true);
+		co.doubleduck.BaseAssets._loader = new createjs.LoadQueue(true);
+		co.doubleduck.BaseAssets._loader.installPlugin(createjs.LoadQueue.SOUND);
 		co.doubleduck.BaseAssets._loader.onFileLoad = co.doubleduck.BaseAssets.handleFileLoaded;
-		co.doubleduck.BaseAssets._loader.onFileError = co.doubleduck.BaseAssets.handleLoadError;
+		co.doubleduck.BaseAssets._loader.onError = co.doubleduck.BaseAssets.handleLoadError;
 		co.doubleduck.BaseAssets._loader.setMaxConnections(10);
 	}
 	return co.doubleduck.BaseAssets._loader;
@@ -654,17 +654,15 @@ co.doubleduck.BaseAssets.loadAndCall = function(uri,callbackFunc) {
 	co.doubleduck.BaseAssets.loader().loadFile(uri);
 	co.doubleduck.BaseAssets._loadCallbacks[uri] = callbackFunc;
 }
-co.doubleduck.BaseAssets.addSounds = function(sounds) {
+co.doubleduck.BaseAssets.finishLoading = function(manifest,sounds) {
 	if(co.doubleduck.SoundManager.available) {
 		var _g1 = 0, _g = sounds.length;
 		while(_g1 < _g) {
-			var mySound = _g1++;
-			co.doubleduck.SoundManager.initSound(sounds[mySound]);
+			var currSound = _g1++;
+			manifest.push(sounds[currSound] + co.doubleduck.SoundManager.EXTENSION);
+			co.doubleduck.SoundManager.initSound(sounds[currSound]);
 		}
 	}
-}
-co.doubleduck.BaseAssets.finishLoading = function(manifest,sounds) {
-	co.doubleduck.BaseAssets.addSounds(sounds);
 	if(co.doubleduck.BaseAssets._useLocalStorage) co.doubleduck.BaseAssets.loadFromLocalStorage(manifest);
 	if(manifest.length == 0) {
 		if(co.doubleduck.BaseAssets.onLoadAll != null) co.doubleduck.BaseAssets.onLoadAll();
@@ -680,15 +678,15 @@ co.doubleduck.BaseAssets.loadAll = function(manifest,sounds) {
 	manifest[manifest.length] = "images/duckling/page_marker.png";
 }
 co.doubleduck.BaseAssets.audioLoaded = function(event) {
-	co.doubleduck.BaseAssets._cacheData[event.src] = event;
+	co.doubleduck.BaseAssets._cacheData[event.item.src] = event;
 }
 co.doubleduck.BaseAssets.manifestFileLoad = function(event) {
 	if(co.doubleduck.BaseAssets._useLocalStorage && event != null) {
 		var utils = new ddjsutils();
 		try {
-			var fileName = event.src;
+			var fileName = event.item.src;
 			if(HxOverrides.substr(fileName,fileName.length - 3,null) == "jpg") return;
-			co.doubleduck.BasePersistence.setValue(event.src,utils.getBase64Image(event.result));
+			co.doubleduck.BasePersistence.setValue(event.item.src,utils.getBase64Image(event.result));
 		} catch( err ) {
 		}
 	}
@@ -723,8 +721,8 @@ co.doubleduck.BaseAssets.handleLoadError = function(event) {
 }
 co.doubleduck.BaseAssets.handleFileLoaded = function(event) {
 	if(event != null) {
-		co.doubleduck.BaseAssets._cacheData[event.src] = event.result;
-		var callbackFunc = Reflect.field(co.doubleduck.BaseAssets._loadCallbacks,event.src);
+		co.doubleduck.BaseAssets._cacheData[event.item.src] = event.result;
+		var callbackFunc = Reflect.field(co.doubleduck.BaseAssets._loadCallbacks,event.item.src);
 		if(callbackFunc != null) callbackFunc();
 	}
 }
@@ -732,7 +730,7 @@ co.doubleduck.BaseAssets.getAsset = function(uri) {
 	var cache = Reflect.field(co.doubleduck.BaseAssets._cacheData,uri);
 	if(cache == null) {
 		if(co.doubleduck.BaseAssets.loader().getResult(uri) != null) {
-			cache = co.doubleduck.BaseAssets.loader().getResult(uri).result;
+			cache = co.doubleduck.BaseAssets.loader().getResult(uri);
 			co.doubleduck.BaseAssets._cacheData[uri] = cache;
 		}
 	}
@@ -1170,7 +1168,7 @@ co.doubleduck.BaseGame.prototype = {
 	}
 	,exitFocus: function() {
 		var hidden = document.mozHidden;
-		if(hidden) co.doubleduck.SoundManager.mute(); else if(!co.doubleduck.SoundManager.getPersistedMute()) co.doubleduck.SoundManager.unmute();
+		if(hidden) co.doubleduck.SoundManager.mute(false); else if(!co.doubleduck.SoundManager.getPersistedMute()) co.doubleduck.SoundManager.unmute(false);
 	}
 	,showSplash: function() {
 		if(viewporter.ACTIVE) js.Lib.document.body.bgColor = "#00A99D"; else js.Lib.document.body.bgColor = "#D94D00";
@@ -1283,6 +1281,32 @@ co.doubleduck.BasePersistence.initVar = function(initedVar,defaultVal) {
 		co.doubleduck.BasePersistence.available = false;
 	}
 }
+co.doubleduck.BasePersistence.getDynamicValue = function(key) {
+	if(!co.doubleduck.BasePersistence.available) return { };
+	var val = localStorage[co.doubleduck.BasePersistence.GAME_PREFIX + key];
+	return val;
+}
+co.doubleduck.BasePersistence.setDynamicValue = function(key,value) {
+	if(!co.doubleduck.BasePersistence.available) return;
+	localStorage[co.doubleduck.BasePersistence.GAME_PREFIX + key] = value;
+}
+co.doubleduck.BasePersistence.initDynamicVar = function(initedVar,defaultVal) {
+	var value = co.doubleduck.BasePersistence.getDynamicValue(initedVar);
+	if(value == null) try {
+		co.doubleduck.BasePersistence.setDynamicValue(initedVar,defaultVal);
+	} catch( e ) {
+		co.doubleduck.BasePersistence.available = false;
+	}
+}
+co.doubleduck.BasePersistence.printAll = function() {
+	var ls = localStorage;
+	var localStorageLength = ls.length;
+	var _g = 0;
+	while(_g < localStorageLength) {
+		var entry = _g++;
+		null;
+	}
+}
 co.doubleduck.BaseSession = $hxClasses["co.doubleduck.BaseSession"] = function() {
 	createjs.Container.call(this);
 };
@@ -1302,10 +1326,10 @@ co.doubleduck.BaseSession.prototype = $extend(createjs.Container.prototype,{
 			this.onSessionEnd();
 		}
 	}
-	,handleReplayClick: function() {
+	,handleReplayClick: function(properties) {
 		if(this.onRestart != null) {
 			createjs.Ticker.setPaused(false);
-			this.onRestart();
+			this.onRestart(properties);
 		}
 	}
 	,handleMenuClick: function() {
@@ -1530,12 +1554,13 @@ co.doubleduck.LabeledContainer.prototype = $extend(createjs.Container.prototype,
 		this._bitmap.y = this.image.height / 2;
 		this.addChild(this._bitmap);
 	}
-	,addBitmapLabel: function(label,fontType,padding) {
+	,addBitmapLabel: function(label,fontType,padding,centered) {
+		if(centered == null) centered = true;
 		if(padding == null) padding = 0;
 		if(fontType == null) fontType = "";
 		if(this._bitmapText != null) this.removeChild(this._bitmapText);
 		var fontHelper = new co.doubleduck.FontHelper(fontType);
-		this._bitmapText = fontHelper.getNumber(Std.parseInt(label),1,true,null,padding);
+		this._bitmapText = fontHelper.getNumber(Std.parseInt(label),1,true,null,padding,centered);
 		if(this.image != null) {
 			this._bitmapText.x = this.image.width / 2;
 			this._bitmapText.y = this.image.height / 2;
@@ -1555,6 +1580,17 @@ co.doubleduck.LabeledContainer.prototype = $extend(createjs.Container.prototype,
 	}
 	,setBitmapLabelX: function(lx) {
 		this._bitmapText.x = lx;
+	}
+	,getBitmapLabelWidth: function() {
+		var maxWidth = 0;
+		var _g1 = 0, _g = this._bitmapText.getNumChildren();
+		while(_g1 < _g) {
+			var digit = _g1++;
+			var currentDigit = js.Boot.__cast(this._bitmapText.getChildAt(digit) , createjs.Bitmap);
+			var endsAt = currentDigit.x + currentDigit.image.width;
+			if(endsAt > maxWidth) maxWidth = endsAt;
+		}
+		return maxWidth;
 	}
 	,setLabelY: function(ly) {
 		this._text.y = ly;
@@ -1589,6 +1625,7 @@ co.doubleduck.LabeledContainer.prototype = $extend(createjs.Container.prototype,
 co.doubleduck.Button = $hxClasses["co.doubleduck.Button"] = function(bmp,pauseAffected,clickType,clickSound) {
 	if(clickType == null) clickType = 2;
 	if(pauseAffected == null) pauseAffected = true;
+	this._lastClickTime = 0;
 	co.doubleduck.LabeledContainer.call(this,bmp);
 	if(clickSound == null && co.doubleduck.Button._defaultSound != null) this._clickSound = co.doubleduck.Button._defaultSound; else this._clickSound = clickSound;
 	this._bitmap.mouseEnabled = true;
@@ -1619,8 +1656,16 @@ co.doubleduck.Button.prototype = $extend(co.doubleduck.LabeledContainer.prototyp
 	,setToggle: function(flag) {
 		if(flag) this._states.gotoAndStop(0); else this._states.gotoAndStop(1);
 	}
-	,handleToggle: function() {
+	,handleToggle: function(e) {
 		if(this.onToggle == null) return;
+		if(this._lastClickPos == null) this._lastClickPos = new createjs.Point(0,0);
+		if((this._lastClickPos.x < e.stageX + 1 || this._lastClickPos.x > e.stageX + 1) && (this._lastClickPos.y < e.stageY + 1 || this._lastClickPos.y > e.stageY + 1)) {
+			var now = createjs.Ticker.getTime(true);
+			if(now < this._lastClickTime + 500) return;
+		}
+		this._lastClickPos.x = e.stageX;
+		this._lastClickPos.y = e.stageY;
+		this._lastClickTime = createjs.Ticker.getTime(true);
 		this._states.gotoAndStop(1 - this._states.currentFrame);
 		this.onToggle();
 	}
@@ -1675,6 +1720,8 @@ co.doubleduck.Button.prototype = $extend(co.doubleduck.LabeledContainer.prototyp
 	,setNoSound: function() {
 		this._clickSound = null;
 	}
+	,_lastClickPos: null
+	,_lastClickTime: null
 	,_clickSound: null
 	,_juiceTween: null
 	,_clickType: null
@@ -1870,7 +1917,8 @@ co.doubleduck.FontHelper = $hxClasses["co.doubleduck.FontHelper"] = function(typ
 };
 co.doubleduck.FontHelper.__name__ = ["co","doubleduck","FontHelper"];
 co.doubleduck.FontHelper.prototype = {
-	getNumber: function(num,scale,forceContainer,dims,padding) {
+	getNumber: function(num,scale,forceContainer,dims,padding,centered) {
+		if(centered == null) centered = true;
 		if(padding == null) padding = 0;
 		if(forceContainer == null) forceContainer = false;
 		if(scale == null) scale = 1;
@@ -1879,8 +1927,10 @@ co.doubleduck.FontHelper.prototype = {
 			var bmp = this.getDigit(num);
 			bmp.scaleX = bmp.scaleY = scale;
 			result.addChild(bmp);
-			result.regX = bmp.image.width / 2;
-			result.regY = bmp.image.height / 2;
+			if(centered) {
+				result.regX = bmp.image.width / 2;
+				result.regY = bmp.image.height / 2;
+			}
 			if(forceContainer) {
 				if(dims != null) {
 					dims.width = bmp.image.width;
@@ -1921,8 +1971,10 @@ co.doubleduck.FontHelper.prototype = {
 					totalWidth += this._lastComma.image.width * scale + padding;
 				}
 			}
-			result.regX = totalWidth / 2;
-			result.regY = digits[0].image.height / 2;
+			if(centered) {
+				result.regX = totalWidth / 2;
+				result.regY = digits[0].image.height / 2;
+			}
 			if(dims != null) {
 				dims.width = totalWidth;
 				dims.height = digits[0].image.height;
@@ -1935,7 +1987,7 @@ co.doubleduck.FontHelper.prototype = {
 		return digit1;
 	}
 	,getComma: function() {
-		return co.doubleduck.BaseAssets.getImage(this._fontType + ",.png");
+		return co.doubleduck.BaseAssets.getImage(this._fontType + "comma.png");
 	}
 	,_fontType: null
 	,_lastComma: null
@@ -3508,9 +3560,11 @@ co.doubleduck.SoundManager.isSoundAvailable = function() {
 		return true;
 	}
 	co.doubleduck.SoundManager.engineType = co.doubleduck.SoundType.NONE;
+	co.doubleduck.BasePersistence.initVar("mute");
 	return false;
 }
-co.doubleduck.SoundManager.mute = function() {
+co.doubleduck.SoundManager.mute = function(persisted) {
+	if(persisted == null) persisted = true;
 	if(!co.doubleduck.SoundManager.available) return;
 	co.doubleduck.SoundManager._muted = true;
 	var _g1 = 0, _g = Reflect.fields(co.doubleduck.SoundManager._cache).length;
@@ -3519,18 +3573,23 @@ co.doubleduck.SoundManager.mute = function() {
 		var mySound = Reflect.getProperty(co.doubleduck.SoundManager._cache,Reflect.fields(co.doubleduck.SoundManager._cache)[currSound]);
 		if(mySound != null) mySound.setVolume(0);
 	}
-	co.doubleduck.SoundManager.setPersistedMute(co.doubleduck.SoundManager._muted);
+	if(persisted) co.doubleduck.SoundManager.setPersistedMute(co.doubleduck.SoundManager._muted);
 }
-co.doubleduck.SoundManager.unmute = function() {
+co.doubleduck.SoundManager.unmute = function(persisted) {
+	if(persisted == null) persisted = true;
 	if(!co.doubleduck.SoundManager.available) return;
 	co.doubleduck.SoundManager._muted = false;
-	var _g1 = 0, _g = Reflect.fields(co.doubleduck.SoundManager._cache).length;
-	while(_g1 < _g) {
-		var currSound = _g1++;
-		var mySound = Reflect.getProperty(co.doubleduck.SoundManager._cache,Reflect.fields(co.doubleduck.SoundManager._cache)[currSound]);
-		if(mySound != null) mySound.setVolume(1);
+	try {
+		var _g1 = 0, _g = Reflect.fields(co.doubleduck.SoundManager._cache).length;
+		while(_g1 < _g) {
+			var currSound = _g1++;
+			var mySound = Reflect.getProperty(co.doubleduck.SoundManager._cache,Reflect.fields(co.doubleduck.SoundManager._cache)[currSound]);
+			if(mySound != null) mySound.setVolume(1);
+		}
+	} catch( e ) {
+		null;
 	}
-	co.doubleduck.SoundManager.setPersistedMute(co.doubleduck.SoundManager._muted);
+	if(persisted) co.doubleduck.SoundManager.setPersistedMute(co.doubleduck.SoundManager._muted);
 }
 co.doubleduck.SoundManager.toggleMute = function() {
 	if(co.doubleduck.SoundManager._muted) co.doubleduck.SoundManager.unmute(); else co.doubleduck.SoundManager.mute();
@@ -3591,6 +3650,71 @@ co.doubleduck.SoundManager.prototype = {
 }
 co.doubleduck.Utils = $hxClasses["co.doubleduck.Utils"] = function() { }
 co.doubleduck.Utils.__name__ = ["co","doubleduck","Utils"];
+co.doubleduck.Utils.dateDeltaInDays = function(day1,day2) {
+	var delta = Math.abs(day2.getTime() - day1.getTime());
+	return delta / 86400000;
+}
+co.doubleduck.Utils.getTodayDate = function() {
+	var newDate = new Date();
+	return HxOverrides.dateStr(newDate);
+}
+co.doubleduck.Utils.getHour = function() {
+	var newDate = new Date();
+	return newDate.getHours();
+}
+co.doubleduck.Utils.rectOverlap = function(r1,r2) {
+	var r1TopLeft = new createjs.Point(r1.x,r1.y);
+	var r1BottomRight = new createjs.Point(r1.x + r1.width,r1.y + r1.height);
+	var r1TopRight = new createjs.Point(r1.x + r1.width,r1.y);
+	var r1BottomLeft = new createjs.Point(r1.x,r1.y + r1.height);
+	var r2TopLeft = new createjs.Point(r2.x,r2.y);
+	var r2BottomRight = new createjs.Point(r2.x + r2.width,r2.y + r2.height);
+	var r2TopRight = new createjs.Point(r2.x + r2.width,r2.y);
+	var r2BottomLeft = new createjs.Point(r2.x,r2.y + r2.height);
+	if(co.doubleduck.Utils.rectContainPoint(r2TopLeft,r2BottomRight,r1TopLeft)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(r2TopLeft,r2BottomRight,r1BottomRight)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(r2TopLeft,r2BottomRight,r1TopRight)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(r2TopLeft,r2BottomRight,r1BottomLeft)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(r1TopLeft,r1BottomRight,r2TopLeft)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(r1TopLeft,r1BottomRight,r2BottomRight)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(r1TopLeft,r1BottomRight,r2TopRight)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(r1TopLeft,r1BottomRight,r2BottomLeft)) return true;
+	return false;
+}
+co.doubleduck.Utils.overlap = function(obj1,obj1Width,obj1Height,obj2,obj2Width,obj2Height) {
+	var o1TopLeft = new createjs.Point(obj1.x - obj1.regX * co.doubleduck.BaseGame.getScale(),obj1.y - obj1.regY * co.doubleduck.BaseGame.getScale());
+	var o1BottomRight = new createjs.Point(o1TopLeft.x - obj1.regX * co.doubleduck.BaseGame.getScale() + obj1Width * co.doubleduck.BaseGame.getScale(),o1TopLeft.y + obj1Height * co.doubleduck.BaseGame.getScale() - obj1.regY * co.doubleduck.BaseGame.getScale());
+	var o1TopRight = new createjs.Point(o1BottomRight.x - obj1.regX * co.doubleduck.BaseGame.getScale(),o1TopLeft.y - obj1.regY * co.doubleduck.BaseGame.getScale());
+	var o1BottomLeft = new createjs.Point(o1TopLeft.x - obj1.regX * co.doubleduck.BaseGame.getScale(),o1BottomRight.y - obj1.regY * co.doubleduck.BaseGame.getScale());
+	var o2TopLeft = new createjs.Point(obj2.x - obj2.regX * co.doubleduck.BaseGame.getScale(),obj2.y - obj2.regY * co.doubleduck.BaseGame.getScale());
+	var o2BottomRight = new createjs.Point(o2TopLeft.x + obj2Width * co.doubleduck.BaseGame.getScale() - obj2.regX * co.doubleduck.BaseGame.getScale(),o2TopLeft.y + obj2Height * co.doubleduck.BaseGame.getScale() - obj2.regY * co.doubleduck.BaseGame.getScale());
+	var o2TopRight = new createjs.Point(o2BottomRight.x - obj2.regX * co.doubleduck.BaseGame.getScale(),o2TopLeft.y - obj2.regY * co.doubleduck.BaseGame.getScale());
+	var o2BottomLeft = new createjs.Point(o2TopLeft.x - obj2.regX * co.doubleduck.BaseGame.getScale(),o2BottomRight.y - obj2.regY * co.doubleduck.BaseGame.getScale());
+	if(co.doubleduck.Utils.rectContainPoint(o2TopLeft,o2BottomRight,o1TopLeft)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(o2TopLeft,o2BottomRight,o1BottomRight)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(o2TopLeft,o2BottomRight,o1TopRight)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(o2TopLeft,o2BottomRight,o1BottomLeft)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(o1TopLeft,o1BottomRight,o2TopLeft)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(o1TopLeft,o1BottomRight,o2BottomRight)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(o1TopLeft,o1BottomRight,o2TopRight)) return true;
+	if(co.doubleduck.Utils.rectContainPoint(o1TopLeft,o1BottomRight,o2BottomLeft)) return true;
+	return false;
+}
+co.doubleduck.Utils.rectContainPoint = function(rectTopLeft,rectBottomRight,point) {
+	return point.x >= rectTopLeft.x && point.x <= rectBottomRight.x && point.y >= rectTopLeft.y && point.y <= rectBottomRight.y;
+}
+co.doubleduck.Utils.objectContains = function(dyn,memberName) {
+	return Reflect.hasField(dyn,memberName);
+}
+co.doubleduck.Utils.contains = function(arr,obj) {
+	var _g = 0;
+	while(_g < arr.length) {
+		var element = arr[_g];
+		++_g;
+		if(element == obj) return true;
+	}
+	return false;
+}
 co.doubleduck.Utils.isMobileFirefox = function() {
 	var isFirefox = /Firefox/.test(navigator.userAgent);
 	return isFirefox && viewporter.ACTIVE;

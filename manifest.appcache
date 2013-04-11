@@ -1,12 +1,15 @@
 CACHE MANIFEST
-# V1.13
+# V1.15
 
 NETWORK:
 *
 
 CACHE:
+# --- Add game files --- #
+index.html
+GoldenCage.js
 createjs/easeljs-0.5.0.min.js
-createjs/preloadjs-0.2.0.min.js
+createjs/preloadjs-0.3.0.min.js
 createjs/soundjs-0.3.0.min.js
 createjs/tweenjs-0.3.0.min.js
 data/GameplayDB.js
@@ -192,6 +195,3 @@ sound/weapons/sniper.mp3
 sound/weapons/sniper.ogg
 sound/weapons/tavor.mp3
 sound/weapons/tavor.ogg
-# --- Add game files --- #
-index.html
-GoldenCage.js
