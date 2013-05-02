@@ -999,7 +999,10 @@ co.doubleduck.BaseGame = $hxClasses["co.doubleduck.BaseGame"] = function(stage) 
 	isGS3Stock = isGS3Stock && /GT-I9300/.test(navigator.userAgent);
 	isGS3Stock = isGS3Stock && !/Chrome/.test(navigator.userAgent);
 	if(isGS3Stock) {
-		js.Lib.alert("This phone's version is not supported. please update your phone's software.");
+		var loc = window.location.href;
+		if(loc.lastIndexOf("index.html") != -1) loc = HxOverrides.substr(loc,0,loc.lastIndexOf("index.html"));
+		loc += "error.html";
+		window.location.href=loc;
 		return;
 	}
 	co.doubleduck.Persistence.initGameData();
